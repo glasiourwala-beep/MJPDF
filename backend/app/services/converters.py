@@ -1,3 +1,28 @@
+"""
+High-quality document conversion services for MJPDF.
+Uses LibreOffice for Office formats and pdf2docx / PyMuPDF for PDF operations.
+Designed for concurrent requests (unique LO profiles + unique temp paths).
+"""
+import asyncio
+import subprocess
+import shutil
+import tempfile
+import uuid
+import os
+from pathlib import Path
+from typing import Optional
+
+import pymupdf as fitz
+from pdf2docx import Converter
+from pypdf import PdfReader, PdfWriter
+from docx import Document
+from pptx import Presentation
+from PIL import Image
+import pdf2image
+
+from ..config import LIBREOFFICE_CMD, TEMP_DIR, OUTPUT_DIR
+from ..utils.security import safe_output_path, cleanup_file
+from concurrent.futures import ThreadPoolExecutor
 
 def apply_owner_page_watermark(pdf_path: Path, text: str = "Created by MJ Rafay") -> None:
     """Bake a clear multi-layer page watermark into PDF content (self-host builds)."""
@@ -42,31 +67,6 @@ def apply_owner_page_watermark(pdf_path: Path, text: str = "Created by MJ Rafay"
         except Exception:
             pass
 
-"""
-High-quality document conversion services for MJPDF.
-Uses LibreOffice for Office formats and pdf2docx / PyMuPDF for PDF operations.
-Designed for concurrent requests (unique LO profiles + unique temp paths).
-"""
-import asyncio
-import subprocess
-import shutil
-import tempfile
-import uuid
-import os
-from pathlib import Path
-from typing import Optional
-
-import pymupdf as fitz
-from pdf2docx import Converter
-from pypdf import PdfReader, PdfWriter
-from docx import Document
-from pptx import Presentation
-from PIL import Image
-import pdf2image
-
-from ..config import LIBREOFFICE_CMD, TEMP_DIR, OUTPUT_DIR
-from ..utils.security import safe_output_path, cleanup_file
-from concurrent.futures import ThreadPoolExecutor
 
 # Bounded thread pool for CPU / subprocess work (multi-user friendly)
 _MAX_WORKERS = min(32, max(4, (os.cpu_count() or 4) * 2))

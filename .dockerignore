@@ -1,0 +1,11 @@
+venv
+__pycache__
+*.pyc
+.git
+temp/*
+uploads/*
+outputs/*
+*.zip
+.env
+
+.selfhost

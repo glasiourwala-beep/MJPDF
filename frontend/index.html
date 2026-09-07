@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MJPDF — All-in-One PDF Tools</title>
+  <meta name="description" content="Convert, compress, merge, split and manage PDF files online with MJPDF. Simple PDF tools with powerful results." />
+  <link rel="canonical" href="/" />
+  <link rel="icon" href="/static/img/logo-mark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="MJPDF — All-in-One PDF Tools" />
+  <meta property="og:description" content="Convert, compress, merge, split and manage PDF files online with MJPDF." />
+  <meta property="og:image" content="/static/img/logo.jpg" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MJPDF — All-in-One PDF Tools" />
+  <meta name="twitter:description" content="Convert, compress, merge, split and manage PDF files online with MJPDF." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebSite","name":"MJPDF","url":"/","description":"All-in-One PDF Tools"}
+  </script>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"Organization","name":"MJPDF","url":"/","email":"glasiourwala@gmail.com","logo":"/static/img/logo.jpg"}
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="/" aria-label="MJPDF home">
+        <img class="logo-img" src="/static/img/logo-mark.svg" width="36" height="36" alt="MJPDF logo" />
+        <span class="logo-text">
+          <strong>MJPDF</strong>
+          <span>Simple PDF Tools. Powerful Results.</span>
+        </span>
+      </a>
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="main-nav">Menu</button>
+      <nav class="nav" id="main-nav" aria-label="Main">
+        <a href="/" data-nav="home">Home</a>
+        <a class="hide-sm" href="/#tools" data-nav="tools">Tools</a>
+        <a class="hide-sm" href="/download.html">Download</a>
+        <a class="hide-sm" href="/about.html" data-nav="about">About</a>
+        <a class="hide-sm" href="/contact.html" data-nav="contact">Contact</a>
+        <a class="btn btn-primary" href="/#tools">Explore tools</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div id="view-home">
+      <section class="hero">
+        <div class="container hero-inner">
+          <h1>All-in-one PDF tools, built for clarity and speed.</h1>
+          <p class="lead">Convert, compress, merge, split, protect, and manage PDFs in a focused workflow—without the clutter.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary btn-lg" href="#tools">Browse tools</a>
+            <a class="btn btn-secondary btn-lg" href="/about.html">About MJPDF</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="tools">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <h2>PDF tools</h2>
+              <p>Select a tool to upload a file and process it on the server. Download when ready.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;align-items:stretch;width:100%;max-width:420px">
+              <div class="search-wrap">
+                <label class="sr-only" for="tool-search">Search PDF tools</label>
+                <input type="search" id="tool-search" placeholder="Search PDF tools..." autocomplete="off" />
+                <button type="button" class="search-clear hidden" id="search-clear" aria-label="Clear search">×</button>
+              </div>
+              <div class="filters" id="filters" role="group" aria-label="Filter tools">
+                <button type="button" class="filter-btn active" data-filter="all">All</button>
+                <button type="button" class="filter-btn" data-filter="convert">Convert</button>
+                <button type="button" class="filter-btn" data-filter="organize">Organize</button>
+                <button type="button" class="filter-btn" data-filter="secure">Secure</button>
+              </div>
+            </div>
+          </div>
+          <div class="tools-grid" id="tools-grid"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-workspace" class="workspace hidden">
+      <div class="container">
+        <a href="/" class="back-link" id="back-home">← All tools</a>
+        <div class="tool-hero">
+          <h1 id="tool-title">Tool</h1>
+          <p id="tool-desc"></p>
+        </div>
+        <div class="panel">
+          <div id="stage-idle">
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Upload file">
+              <p class="dropzone-title">Drop your file here</p>
+              <p class="dropzone-sub">or <label for="file-input">browse files</label></p>
+              <p class="dropzone-hint" id="drop-hint">Maximum file size: 100 MB</p>
+              <input type="file" id="file-input" class="sr-only" />
+            </div>
+            <div id="file-list" class="file-list hidden" aria-live="polite"></div>
+            <div id="options-panel" class="options hidden"></div>
+            <div id="actions" class="actions hidden">
+              <button type="button" class="btn btn-primary" id="process-btn">Process</button>
+              <button type="button" class="btn btn-secondary" id="clear-btn">Clear</button>
+            </div>
+          </div>
+          <div id="stage-upload" class="stage hidden" aria-live="polite">
+            <p class="stage-title" id="upload-status">Uploading your file…</p>
+            <div class="progress-track"><div class="progress-fill" id="upload-fill"></div></div>
+            <div class="progress-meta">
+              <span><strong id="upload-pct">0%</strong> · <span id="upload-bytes">0 B / 0 B</span></span>
+              <span>Speed: <strong id="upload-speed">—</strong></span>
+              <span>Time left: <strong id="upload-eta">—</strong></span>
+            </div>
+          </div>
+          <div id="stage-processing" class="stage hidden" aria-live="polite">
+            <div class="processing-box">
+              <div class="spinner" aria-hidden="true"></div>
+              <p class="stage-title" id="process-msg">Processing your file…</p>
+              <p class="processing-hint">Please keep this page open. Do not refresh or close the browser until processing is complete.</p>
+            </div>
+          </div>
+          <div id="stage-success" class="stage hidden" aria-live="polite">
+            <div class="success-box">
+              <div class="status-icon" aria-hidden="true">✓</div>
+              <h3>Your file is ready</h3>
+              <div class="file-summary" id="success-summary"></div>
+              <div class="success-actions">
+                <a class="btn btn-primary btn-lg" id="download-btn" download>Download file</a>
+                <button type="button" class="btn btn-secondary" id="again-btn">Process another file</button>
+              </div>
+            </div>
+          </div>
+          <div id="stage-error" class="stage hidden" aria-live="assertive">
+            <div class="error-box">
+              <div class="status-icon" aria-hidden="true">!</div>
+              <h3>We couldn’t process your file</h3>
+              <p id="error-msg" class="processing-msg"></p>
+              <div class="error-actions">
+                <button type="button" class="btn btn-primary" id="retry-btn">Try again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="seo-block" id="seo-how">
+          <h2>How to use this tool</h2>
+          <p></p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="logo" href="/">
+            <img class="logo-img" src="/static/img/logo-mark.svg" width="36" height="36" alt="" />
+            <span class="logo-text"><strong>MJPDF</strong><span>All-in-One PDF Tools</span></span>
+          </a>
+          <p>Simple PDF tools for everyday document work.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="/">Home</a>
+          <a href="/#tools">PDF Tools</a>
+          <a href="/download.html">Download</a>
+          <a href="/about.html">About</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/privacy-policy">Privacy Policy</a>
+          <a href="/cookie-policy">Cookie Policy</a>
+          <a href="/terms.html">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="y"></span> MJPDF</span>
+        <button type="button" class="btn btn-ghost" id="cookie-reopen" style="padding:0.2rem 0.4rem;font-size:0.82rem;font-weight:500">Cookie settings</button>
+      </div>
+    </div>
+  </footer>
+
+  <div id="cookie-overlay" class="cookie-overlay hidden" aria-hidden="true"></div>
+  <div id="cookie-banner" class="cookie-banner hidden" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc">
+    <h2 id="cookie-title">We value your privacy</h2>
+    <p id="cookie-desc">We use cookies and similar technologies for essential site functionality. You can accept or reject optional cookies. See our <a href="/cookie-policy">Cookie Policy</a>.</p>
+    <div class="cookie-actions">
+      <button type="button" class="btn btn-primary btn-lg" id="cookie-accept">Accept Cookies</button>
+      <button type="button" class="btn btn-secondary" id="cookie-reject">Reject non-essential</button>
+      <button type="button" class="btn btn-ghost" id="cookie-settings-btn">Cookie settings</button>
+    </div>
+    <div id="cookie-settings" class="cookie-settings hidden">
+      <div class="cookie-row">
+        <div><strong>Essential cookies</strong><span>Required for basic site operation. Always active.</span></div>
+        <input type="checkbox" checked disabled aria-label="Essential cookies always on" />
+      </div>
+      <div class="cookie-row">
+        <div><strong>Analytics cookies</strong><span>Optional. MJPDF does not currently load third-party analytics by default.</span></div>
+        <input type="checkbox" id="cookie-analytics" aria-label="Analytics cookies" />
+      </div>
+      <div class="cookie-actions">
+        <button type="button" class="btn btn-primary" id="cookie-save">Save preferences</button>
+      </div>
+    </div>
+  </div>
+
+  <script>document.getElementById("y").textContent = new Date().getFullYear();</script>
+  <script src="/static/js/tools-data.js"></script>
+  <script src="/static/js/cookies.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script>
+    document.getElementById("cookie-reopen")?.addEventListener("click", () => {
+      document.getElementById("cookie-overlay")?.classList.remove("hidden");
+      document.getElementById("cookie-banner")?.classList.remove("hidden");
+      document.getElementById("cookie-settings")?.classList.remove("hidden");
+      document.documentElement.classList.add("cookie-lock");
+      document.body.classList.add("cookie-lock");
+    });
+  </script>
+</body>
+</html>

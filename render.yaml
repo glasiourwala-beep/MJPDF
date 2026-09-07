@@ -1,0 +1,10 @@
+# Optional Blueprint — you can also configure the service in the Render dashboard
+services:
+  - type: web
+    name: mjpdf
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHONPATH
+        value: /app

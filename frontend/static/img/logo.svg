@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" role="img" aria-label="MJPDF">
+  <defs>
+    <linearGradient id="mj2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="4" width="40" height="40" rx="10" fill="#11141B"/>
+  <text x="20" y="31" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="800" fill="url(#mj2)">MJ</text>
+  <text x="52" y="32" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="800" fill="#E8EDF5" letter-spacing="1.5">MJPDF</text>
+</svg>

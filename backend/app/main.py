@@ -258,6 +258,13 @@ if FRONTEND_DIR.exists():
                 return FileResponse(path, media_type="text/html")
             return _not_found_response()
 
+        # Google Search Console verification files (google*.html)
+        if page_name.startswith("google") and page_name.endswith(".html"):
+            path = FRONTEND_DIR / page_name
+            if path.is_file():
+                return FileResponse(path, media_type="text/html")
+            return _not_found_response()
+
         # Known tools → SPA index.html
         if page_name in ALLOWED_TOOL_IDS:
             index_path = FRONTEND_DIR / "index.html"

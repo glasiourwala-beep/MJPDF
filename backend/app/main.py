@@ -128,7 +128,17 @@ for route in tools.router.routes:
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "MJPDF", "version": "1.1.0"}
+    from .config import LIBREOFFICE_CMD
+    import shutil
+    lo = Path(LIBREOFFICE_CMD)
+    lo_ok = lo.is_file() or bool(shutil.which(str(LIBREOFFICE_CMD))) or bool(shutil.which("soffice"))
+    return {
+        "status": "ok",
+        "service": "MJPDF",
+        "version": "1.1.1",
+        "libreoffice": bool(lo_ok),
+        "libreoffice_cmd": str(LIBREOFFICE_CMD),
+    }
 
 
 

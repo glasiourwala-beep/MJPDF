@@ -79,25 +79,41 @@ async def run_cmd(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
         raise RuntimeError("Conversion timed out")
 
 
-def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, timeout: int = 120) -> Path:
+def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, timeout: int = 180) -> Path:
     """
-    Convert using LibreOffice headless.
-    Uses a shared UserInstallation profile + process lock so local runs stay fast
-    (avoids cold-start cost of creating a new LO profile every request).
+    LibreOffice headless convert.
+    Copies input to a simple ASCII filename (special chars break soffice),
+    uses a writable profile under TEMP_DIR.
     """
-    if not Path(LIBREOFFICE_CMD).is_file() and shutil.which(str(LIBREOFFICE_CMD)) is None:
-        raise RuntimeError(
-            "LibreOffice not found. Please install LibreOffice from "
-            "https://www.libreoffice.org/download/ then restart the server. "
-            "On Windows the usual path is: C:\\Program Files\\LibreOffice\\program\\soffice.exe"
-        )
+    lo = str(LIBREOFFICE_CMD)
+    if not Path(lo).is_file() and shutil.which(lo) is None:
+        # try common linux names
+        for cand in ("soffice", "libreoffice", "/usr/bin/soffice", "/usr/bin/libreoffice"):
+            if Path(cand).is_file() or shutil.which(cand):
+                lo = shutil.which(cand) or cand
+                break
+        else:
+            raise RuntimeError(
+                "LibreOffice is not installed on the server. Word/PPT to PDF needs LibreOffice."
+            )
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    _LO_SHARED_PROFILE.mkdir(parents=True, exist_ok=True)
-    profile_uri = _LO_SHARED_PROFILE.resolve().as_uri()
+
+    # Simple path — LO fails on many unicode/space names
+    safe_in = out_dir / f"input_{uuid.uuid4().hex[:10]}{input_path.suffix.lower()}"
+    shutil.copy2(str(input_path), str(safe_in))
+
+    profile_dir = TEMP_DIR / f"lo_prof_{uuid.uuid4().hex[:12]}"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    profile_uri = profile_dir.resolve().as_uri()
+
+    # Normalize filter (writer_pdf_Export can fail on some LO builds)
+    fmt = target_format
+    if fmt.startswith("pdf:"):
+        fmt = "pdf"
 
     cmd = [
-        str(LIBREOFFICE_CMD),
+        lo,
         "--headless",
         "--norestore",
         "--nofirststartwizard",
@@ -105,40 +121,59 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
         "--nodefault",
         "--nolockcheck",
         f"-env:UserInstallation={profile_uri}",
-        "--convert-to", target_format,
+        "--convert-to", fmt,
         "--outdir", str(out_dir.resolve()),
-        str(input_path.resolve()),
+        str(safe_in.resolve()),
     ]
 
-    # Serialize LO: shared profile cannot run two conversions at once
-    with _lo_thread_lock:
-        try:
+    env = {
+        **os.environ,
+        "HOME": str(profile_dir),
+        "SAL_USE_VCLPLUGIN": "svp",
+    }
+
+    try:
+        with _lo_thread_lock:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 cwd=str(out_dir),
-                env={**os.environ, "HOME": str(_LO_SHARED_PROFILE)},
+                env=env,
             )
-        except FileNotFoundError:
-            raise RuntimeError(
-                "LibreOffice not found on this system. Install it from "
-                "https://www.libreoffice.org/download/ then restart MJPDF."
-            )
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        raise RuntimeError("Conversion timed out. Try a smaller file or retry.")
+    except FileNotFoundError:
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        raise RuntimeError("LibreOffice binary not found on server.")
+    finally:
+        try:
+            safe_in.unlink(missing_ok=True)
+        except Exception:
+            pass
+        shutil.rmtree(profile_dir, ignore_errors=True)
 
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()
-        raise RuntimeError(f"LibreOffice conversion failed: {err or 'unknown error'}")
+        # Common OOM / crash
+        low = err.lower()
+        if "memory" in low or "killed" in low:
+            raise RuntimeError("Server ran out of memory during conversion. Try a smaller file.")
+        raise RuntimeError(f"LibreOffice failed: {err[:300] or 'unknown error'}")
 
-    stem = input_path.stem
-    candidates = list(out_dir.glob(f"{stem}.*"))
+    # Output named after safe_in stem
+    stem = safe_in.stem
+    candidates = sorted(out_dir.glob(f"{stem}.*"), key=lambda p: p.stat().st_mtime, reverse=True)
     for c in candidates:
-        if c.suffix.lower().lstrip(".") in target_format.split(":")[0].lower():
+        if c.suffix.lower() == ".pdf" or c.suffix.lower().lstrip(".") in fmt.split(":")[0].lower():
             return c
-    if candidates:
-        return candidates[0]
-    raise RuntimeError("LibreOffice produced no output file")
+    # any new non-input file
+    for c in candidates:
+        if c.resolve() != safe_in.resolve():
+            return c
+    raise RuntimeError("LibreOffice produced no output file. The document may be corrupted or unsupported.")
 
 
 async def _libreoffice_convert_async(input_path: Path, out_dir: Path, target_format: str, timeout: int = 120) -> Path:
@@ -380,23 +415,27 @@ def _normalize_docx_lists(docx_path: Path) -> Path:
 
 async def word_to_pdf(docx_path: Path) -> Path:
     """
-    High-fidelity Word → PDF via LibreOffice.
-    Pre-normalizes list markers (oversized bullets) then exports with writer_pdf_Export.
+    Word DOC/DOCX → PDF via LibreOffice (reliable filter: pdf).
+    Pre-normalizes oversized list markers when possible.
     """
-    # Cap huge bullet glyphs so LO does not render giant dots
-    src = await _run_sync(_normalize_docx_lists, docx_path)
+    try:
+        src = await _run_sync(_normalize_docx_lists, docx_path)
+    except Exception:
+        src = docx_path
     work = TEMP_DIR / f"lo_word_{uuid.uuid4().hex}"
     work.mkdir(exist_ok=True)
     try:
-        try:
-            converted = await _libreoffice_convert_async(
-                src, work, "pdf:writer_pdf_Export", timeout=120
-            )
-        except Exception:
-            converted = await _libreoffice_convert_async(src, work, "pdf", timeout=120)
+        converted = await _libreoffice_convert_async(src, work, "pdf", timeout=180)
+        if not converted.exists() or converted.stat().st_size < 50:
+            raise RuntimeError("PDF output was empty")
         final = safe_output_path("word2pdf", "pdf")
         shutil.move(str(converted), str(final))
         return final
+    except Exception as e:
+        msg = str(e)
+        if "LibreOffice" in msg or "soffice" in msg:
+            raise
+        raise RuntimeError(f"Word to PDF failed: {msg}") from e
     finally:
         shutil.rmtree(work, ignore_errors=True)
         if src != docx_path:

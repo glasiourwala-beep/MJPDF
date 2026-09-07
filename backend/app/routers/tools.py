@@ -60,7 +60,7 @@ async def word_to_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)[:400])
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ async def pptx_to_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)[:400])
 
 
 # ---------------------------------------------------------------------------

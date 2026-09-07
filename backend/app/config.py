@@ -62,10 +62,4 @@ def find_libreoffice() -> str:
 
 LIBREOFFICE_CMD = find_libreoffice()
 
-# Self-hosted download package: place empty file ".selfhost" in project root
-# or set env MJPDF_OWNER_WATERMARK=1 to stamp outputs.
-import os as _os
-OWNER_WATERMARK = (
-    _os.environ.get("MJPDF_OWNER_WATERMARK", "").strip() in ("1", "true", "yes")
-    or (BASE_DIR / ".selfhost").is_file()
-)
+OWNER_WATERMARK = False  # visual "Created by MJ Rafay" watermark disabled

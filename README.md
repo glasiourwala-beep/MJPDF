@@ -216,7 +216,6 @@ mjpdf/
 
 | Tool | Route / API |
 |------|-------------|
-| PDF to Word | `/pdf-to-word` |
 | Word to PDF | `/word-to-pdf` |
 | PowerPoint to PDF | `/pptx-to-pdf` |
 | Compress PDF | `/compress-pdf` |

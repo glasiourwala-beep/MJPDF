@@ -18,28 +18,8 @@ def _pdf_response(path: Path, filename: str, background=None, headers=None):
     return FileResponse(**kw)
 
 def _mark_pdf_ownership(path: Path) -> None:
-    """Metadata always; clear page watermark only on self-hosted builds."""
-    try:
-        import pymupdf as fitz
-        doc = fitz.open(str(path))
-        meta = doc.metadata or {}
-        meta["producer"] = "MJPDF"
-        meta["creator"] = "MJPDF — Built by Muhammad Rafay Ghaffar"
-        doc.set_metadata(meta)
-        doc.saveIncr()
-        doc.close()
-    except Exception:
-        try:
-            doc.close()
-        except Exception:
-            pass
-    try:
-        from ..config import OWNER_WATERMARK
-        if OWNER_WATERMARK and path.suffix.lower() == ".pdf":
-            from ..services.converters import apply_owner_page_watermark
-            apply_owner_page_watermark(path, "Created by MJ Rafay")
-    except Exception:
-        pass
+    """No visual watermark on outputs."""
+    return
 
 
 from typing import Optional, List
@@ -61,36 +41,6 @@ def _schedule_cleanup(background_tasks: BackgroundTasks, *paths):
 
 
 # ---------------------------------------------------------------------------
-# 1. PDF → Word
-# ---------------------------------------------------------------------------
-@router.post("/pdf-to-word")
-async def pdf_to_word(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-):
-    path, original = await save_upload(file, "pdf")
-    try:
-        out = await cv.pdf_to_docx(path)
-        _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
-        return FileResponse(
-            path=out,
-            filename=f"{Path(original).stem}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            background=background_tasks,
-        )
-    except Exception as e:
-        cleanup_file(path)
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
-
-
-# ---------------------------------------------------------------------------
 # 2. Word → PDF
 # ---------------------------------------------------------------------------
 @router.post("/word-to-pdf")
@@ -102,13 +52,6 @@ async def word_to_pdf(
     try:
         out = await cv.word_to_pdf(path)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}.pdf",
@@ -132,13 +75,6 @@ async def pptx_to_pdf(
     try:
         out = await cv.pptx_to_pdf(path)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}.pdf",
@@ -171,13 +107,6 @@ async def compress_pdf(
             "X-Compressed-Size": str(stats["compressed_size"]),
             "X-Reduction-Percent": str(stats["reduction_percent"]),
         }
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_compressed.pdf",
@@ -207,13 +136,6 @@ async def merge_pdf(
             paths.append(p)
         out = await cv.merge_pdfs(paths)
         _schedule_cleanup(background_tasks, *paths, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename="merged.pdf",
@@ -239,13 +161,6 @@ async def extract_pages(
     try:
         out = await cv.extract_pages(path, pages)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_extracted.pdf",
@@ -267,13 +182,6 @@ async def delete_pages(
     try:
         out = await cv.delete_pages(path, pages)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_deleted.pdf",
@@ -301,13 +209,6 @@ async def split_pdf(
                 cleanup_file(p)
         cleanup_file(path)
         _schedule_cleanup(background_tasks, zip_path)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=zip_path,
             filename=f"{Path(original).stem}_pages.zip",
@@ -336,13 +237,6 @@ async def images_to_pdf(
             paths.append(p)
         out = await cv.images_to_pdf(paths, page_size, orientation)
         _schedule_cleanup(background_tasks, *paths, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename="images.pdf",
@@ -375,13 +269,6 @@ async def pdf_to_images(
                 cleanup_file(p)
         cleanup_file(path)
         _schedule_cleanup(background_tasks, zip_path)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=zip_path,
             filename=f"{Path(original).stem}_images.zip",
@@ -407,13 +294,6 @@ async def rotate_pdf(
     try:
         out = await cv.rotate_pdf(path, angle, pages)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_rotated.pdf",
@@ -439,13 +319,6 @@ async def organize_pdf(
         order = [int(x.strip()) - 1 for x in page_order.split(",") if x.strip()]
         out = await cv.organize_pdf(path, order)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_organized.pdf",
@@ -502,13 +375,6 @@ async def watermark_pdf(
             font_size=fsz,
         )
         _schedule_cleanup(background_tasks, path, img_path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_watermarked.pdf",
@@ -540,13 +406,6 @@ async def protect_pdf(
     try:
         out = await cv.protect_pdf(path, password)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_protected.pdf",
@@ -571,13 +430,6 @@ async def unlock_pdf(
     try:
         out = await cv.unlock_pdf(path, password)
         _schedule_cleanup(background_tasks, path, out)
-        # ownership / self-host watermark
-        try:
-            _p = locals().get("out") or locals().get("path")
-            if _p is not None and str(_p).lower().endswith(".pdf"):
-                _mark_pdf_ownership(Path(_p))
-        except Exception:
-            pass
         return FileResponse(
             path=out,
             filename=f"{Path(original).stem}_unlocked.pdf",

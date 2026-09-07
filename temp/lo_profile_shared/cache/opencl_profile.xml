@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profile>
+ <version>LibreOffice v1</version>
+ <device>
+  <type>opencl</type>
+  <name>NVIDIA GeForce GT 730</name>
+  <driver>471.11</driver>
+  <time>138617</time>
+  <errors>false</errors>
+ </device>
+ <device>
+  <type>native</type>
+  <time>4442112</time>
+  <errors>false</errors>
+ </device>
+</profile>

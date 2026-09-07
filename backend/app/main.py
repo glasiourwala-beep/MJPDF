@@ -160,7 +160,6 @@ PRETTY_PATHS = {
 
 # Only real tools may open the SPA shell
 ALLOWED_TOOL_IDS = frozenset({
-    "pdf-to-word",
     "word-to-pdf",
     "pptx-to-pdf",
     "compress-pdf",
@@ -253,13 +252,6 @@ if FRONTEND_DIR.exists():
 
         # Explicit allowlisted static HTML only
         if page_name in ALLOWED_STATIC_PAGES:
-            path = FRONTEND_DIR / page_name
-            if path.is_file():
-                return FileResponse(path, media_type="text/html")
-            return _not_found_response()
-
-        # Google Search Console verification files (google*.html)
-        if page_name.startswith("google") and page_name.endswith(".html"):
             path = FRONTEND_DIR / page_name
             if path.is_file():
                 return FileResponse(path, media_type="text/html")

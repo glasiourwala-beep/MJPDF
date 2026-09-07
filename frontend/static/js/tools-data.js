@@ -9,20 +9,6 @@ MJPDF.MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 MJPDF.TOOLS = [
   {
-    id: "pdf-to-word",
-    name: "PDF to Word",
-    short: "Convert PDF to editable DOCX",
-    desc: "Turn PDF documents into editable Word files. Best results with text-based PDFs.",
-    icon: "doc",
-    accept: ".pdf",
-    multiple: false,
-    category: "convert",
-    seoTitle: "PDF to Word Converter Online — Free DOCX | MJPDF",
-    seoDesc: "Convert PDF to Word online with MJPDF. Turn PDF files into editable DOCX documents quickly and easily.",
-    processHint: "Converting your PDF to Word…",
-    howTo: "Upload a PDF, click Process, then download the DOCX file. Text-based PDFs convert more accurately than scanned images.",
-  },
-  {
     id: "word-to-pdf",
     name: "Word to PDF",
     short: "Convert DOC/DOCX to PDF",

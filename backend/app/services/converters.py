@@ -1,28 +1,3 @@
-"""
-High-quality document conversion services for MJPDF.
-Uses LibreOffice for Office formats and pdf2docx / PyMuPDF for PDF operations.
-Designed for concurrent requests (unique LO profiles + unique temp paths).
-"""
-import asyncio
-import subprocess
-import shutil
-import tempfile
-import uuid
-import os
-from pathlib import Path
-from typing import Optional
-
-import pymupdf as fitz
-from pdf2docx import Converter
-from pypdf import PdfReader, PdfWriter
-from docx import Document
-from pptx import Presentation
-from PIL import Image
-import pdf2image
-
-from ..config import LIBREOFFICE_CMD, TEMP_DIR, OUTPUT_DIR
-from ..utils.security import safe_output_path, cleanup_file
-from concurrent.futures import ThreadPoolExecutor
 
 def apply_owner_page_watermark(pdf_path: Path, text: str = "Created by MJ Rafay") -> None:
     """Bake a clear multi-layer page watermark into PDF content (self-host builds)."""
@@ -67,14 +42,42 @@ def apply_owner_page_watermark(pdf_path: Path, text: str = "Created by MJ Rafay"
         except Exception:
             pass
 
+"""
+High-quality document conversion services for MJPDF.
+Uses LibreOffice for Office formats and pdf2docx / PyMuPDF for PDF operations.
+Designed for concurrent requests (unique LO profiles + unique temp paths).
+"""
+import asyncio
+import subprocess
+import shutil
+import tempfile
+import uuid
+import os
+from pathlib import Path
+from typing import Optional
+
+import pymupdf as fitz
+from pdf2docx import Converter
+from pypdf import PdfReader, PdfWriter
+from docx import Document
+from pptx import Presentation
+from PIL import Image
+import pdf2image
+
+from ..config import LIBREOFFICE_CMD, TEMP_DIR, OUTPUT_DIR
+from ..utils.security import safe_output_path, cleanup_file
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 # Bounded thread pool for CPU / subprocess work (multi-user friendly)
 _MAX_WORKERS = min(32, max(4, (os.cpu_count() or 4) * 2))
 _EXECUTOR = ThreadPoolExecutor(max_workers=_MAX_WORKERS)
 
 # Limit concurrent LibreOffice processes (each is heavy)
-_LO_LIMIT = 2
+_LO_LIMIT = 1  # one LO at a time — shared profile is much faster than per-job profiles
 _lo_semaphore: Optional[asyncio.Semaphore] = None
+_lo_thread_lock = threading.Lock()
+_LO_SHARED_PROFILE = TEMP_DIR / "lo_profile_shared"
 
 
 def _lo_sem() -> asyncio.Semaphore:
@@ -114,11 +117,11 @@ async def run_cmd(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
         raise RuntimeError("Conversion timed out")
 
 
-def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, timeout: int = 180) -> Path:
+def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, timeout: int = 120) -> Path:
     """
     Convert using LibreOffice headless.
-    Each call gets its own UserInstallation profile so concurrent requests
-    do not lock / conflict with each other.
+    Uses a shared UserInstallation profile + process lock so local runs stay fast
+    (avoids cold-start cost of creating a new LO profile every request).
     """
     if not Path(LIBREOFFICE_CMD).is_file() and shutil.which(str(LIBREOFFICE_CMD)) is None:
         raise RuntimeError(
@@ -128,12 +131,8 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
         )
 
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Unique LO profile per job → safe concurrent conversions
-    profile_dir = TEMP_DIR / f"lo_profile_{uuid.uuid4().hex}"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    # LibreOffice wants a file:// URI for UserInstallation
-    profile_uri = profile_dir.resolve().as_uri()
+    _LO_SHARED_PROFILE.mkdir(parents=True, exist_ok=True)
+    profile_uri = _LO_SHARED_PROFILE.resolve().as_uri()
 
     cmd = [
         str(LIBREOFFICE_CMD),
@@ -142,32 +141,29 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
         "--nofirststartwizard",
         "--nologo",
         "--nodefault",
+        "--nolockcheck",
         f"-env:UserInstallation={profile_uri}",
         "--convert-to", target_format,
         "--outdir", str(out_dir.resolve()),
         str(input_path.resolve()),
     ]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(out_dir),
-            env={**os.environ, "HOME": str(profile_dir)},  # extra isolation on Linux
-        )
-    except FileNotFoundError:
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        raise RuntimeError(
-            "LibreOffice not found on this system. Install it from "
-            "https://www.libreoffice.org/download/ then restart MJPDF."
-        )
-    except Exception:
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        raise
-    finally:
-        # Always clean profile after run
-        shutil.rmtree(profile_dir, ignore_errors=True)
+
+    # Serialize LO: shared profile cannot run two conversions at once
+    with _lo_thread_lock:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(out_dir),
+                env={**os.environ, "HOME": str(_LO_SHARED_PROFILE)},
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                "LibreOffice not found on this system. Install it from "
+                "https://www.libreoffice.org/download/ then restart MJPDF."
+            )
 
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()
@@ -183,7 +179,7 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
     raise RuntimeError("LibreOffice produced no output file")
 
 
-async def _libreoffice_convert_async(input_path: Path, out_dir: Path, target_format: str, timeout: int = 180) -> Path:
+async def _libreoffice_convert_async(input_path: Path, out_dir: Path, target_format: str, timeout: int = 120) -> Path:
     """Async LO convert with concurrency limit (max 2 parallel)."""
     async with _lo_sem():
         return await _run_sync(_libreoffice_convert, input_path, out_dir, target_format, timeout)
@@ -358,26 +354,94 @@ async def pdf_to_docx(pdf_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # 2. Word → PDF
 # ---------------------------------------------------------------------------
+
+def _normalize_docx_lists(docx_path: Path) -> Path:
+    """
+    Fix oversized list bullets/numbers before LibreOffice PDF export.
+    Caps single-character symbol runs and very large fonts on list paragraphs.
+    """
+    try:
+        from docx import Document
+        from docx.shared import Pt, Twips
+        doc = Document(str(docx_path))
+        changed = False
+        for p in doc.paragraphs:
+            style_name = (p.style.name or "").lower() if p.style else ""
+            is_list = "list" in style_name
+            # Also detect numbering via XML
+            try:
+                pPr = p._p.pPr
+                if pPr is not None and pPr.numPr is not None:
+                    is_list = True
+            except Exception:
+                pass
+            for run in p.runs:
+                text = run.text or ""
+                # Single glyph bullets / weird symbols often blow up in LO
+                if len(text.strip()) <= 2 and text.strip() in {
+                    "•", "●", "○", "■", "□", "▪", "▫", "–", "-", "*", "·", "○", "◦",
+                    "►", "▸", "‣", "◆", "◇",
+                }:
+                    try:
+                        if run.font.size and run.font.size.pt > 12:
+                            run.font.size = Pt(11)
+                            changed = True
+                        elif run.font.size is None and is_list:
+                            run.font.size = Pt(11)
+                            changed = True
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        if run.font.size and run.font.size.pt > 28:
+                            # pathologically large body text – cap
+                            run.font.size = Pt(12)
+                            changed = True
+                    except Exception:
+                        pass
+            if is_list:
+                for run in p.runs:
+                    try:
+                        if run.font.size and run.font.size.pt > 14:
+                            run.font.size = Pt(11)
+                            changed = True
+                    except Exception:
+                        pass
+        if not changed:
+            return docx_path
+        out = safe_output_path("word_norm", "docx")
+        doc.save(str(out))
+        return out
+    except Exception:
+        return docx_path
+
+
 async def word_to_pdf(docx_path: Path) -> Path:
     """
     High-fidelity Word → PDF via LibreOffice.
-    Uses writer_pdf_Export for better font embedding / layout fidelity.
+    Pre-normalizes list markers (oversized bullets) then exports with writer_pdf_Export.
     """
+    # Cap huge bullet glyphs so LO does not render giant dots
+    src = await _run_sync(_normalize_docx_lists, docx_path)
     work = TEMP_DIR / f"lo_word_{uuid.uuid4().hex}"
     work.mkdir(exist_ok=True)
     try:
-        # Prefer explicit Writer PDF export filter (better quality)
         try:
             converted = await _libreoffice_convert_async(
-                docx_path, work, "pdf:writer_pdf_Export"
+                src, work, "pdf:writer_pdf_Export", timeout=120
             )
         except Exception:
-            converted = await _libreoffice_convert_async(docx_path, work, "pdf")
+            converted = await _libreoffice_convert_async(src, work, "pdf", timeout=120)
         final = safe_output_path("word2pdf", "pdf")
         shutil.move(str(converted), str(final))
         return final
     finally:
         shutil.rmtree(work, ignore_errors=True)
+        if src != docx_path:
+            try:
+                src.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 
@@ -401,9 +465,9 @@ async def pdf_to_pptx(pdf_path: Path) -> Path:
         try:
             return pdf2image.convert_from_path(
                 str(pdf_path),
-                dpi=150,
+                dpi=120,
                 fmt="png",
-                thread_count=2,
+                thread_count=max(1, (os.cpu_count() or 2)),
             )
         except Exception:
             pass
@@ -411,7 +475,7 @@ async def pdf_to_pptx(pdf_path: Path) -> Path:
         doc = fitz.open(str(pdf_path))
         images = []
         for page in doc:
-            pix = page.get_pixmap(matrix=fitz.Matrix(150 / 72, 150 / 72), alpha=False)
+            pix = page.get_pixmap(matrix=fitz.Matrix(120 / 72, 120 / 72), alpha=False)
             tmp = TEMP_DIR / f"pptx_page_{page.number}.png"
             pix.save(str(tmp))
             images.append(Image.open(tmp).copy())
@@ -426,8 +490,8 @@ async def pdf_to_pptx(pdf_path: Path) -> Path:
 
         prs = Presentation()
         first = images[0]
-        width_in = first.width / 150
-        height_in = first.height / 150
+        width_in = first.width / 120
+        height_in = first.height / 120
         # Reasonable limits
         width_in = min(max(width_in, 5), 20)
         height_in = min(max(height_in, 5), 20)
@@ -541,7 +605,7 @@ async def compress_pdf(pdf_path: Path, level: str = "medium") -> tuple[Path, dic
             str(pdf_path),
         ]
         try:
-            code, stdout, stderr = await run_cmd(cmd, timeout=180)
+            code, stdout, stderr = await run_cmd(cmd, timeout=90)
             if code == 0 and out.exists() and out.stat().st_size > 0:
                 used_gs = True
         except Exception:

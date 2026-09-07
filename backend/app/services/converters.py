@@ -1,47 +1,3 @@
-
-def apply_owner_page_watermark(pdf_path: Path, text: str = "Created by MJ Rafay") -> None:
-    """Bake a clear multi-layer page watermark into PDF content (self-host builds)."""
-    try:
-        import pymupdf as fitz
-        from PIL import Image, ImageDraw, ImageFont
-        import io
-        doc = fitz.open(str(pdf_path))
-        for page in doc:
-            rect = page.rect
-            # Center diagonal stamp
-            w, h = int(max(rect.width, 200)), int(max(rect.height * 0.35, 80))
-            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(18, w // 14))
-            except Exception:
-                font = ImageFont.load_default()
-            # Draw text multiple times slightly offset (harder for naive removal)
-            for dx, dy in ((0, 0), (1, 1), (-1, 0)):
-                draw.text((w // 2 + dx, h // 2 + dy), text, font=font, fill=(40, 40, 40, 70), anchor="mm")
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            stamp = buf.getvalue()
-            # Full-page light overlay stamp
-            page.insert_image(rect, stream=stamp, keep_proportion=False, overlay=True)
-            # Footer line (content stream text)
-            try:
-                page.insert_text(
-                    (36, rect.height - 18),
-                    text + " — MJPDF",
-                    fontsize=8,
-                    color=(0.35, 0.35, 0.35),
-                )
-            except Exception:
-                pass
-        doc.saveIncr()
-        doc.close()
-    except Exception:
-        try:
-            doc.close()
-        except Exception:
-            pass
-
 """
 High-quality document conversion services for MJPDF.
 Uses LibreOffice for Office formats and pdf2docx / PyMuPDF for PDF operations.
@@ -54,6 +10,12 @@ import tempfile
 import uuid
 import os
 from pathlib import Path
+
+
+def apply_owner_page_watermark(pdf_path: Path, text: str = "") -> None:
+    """Disabled — no visual owner watermark on outputs."""
+    return
+
 from typing import Optional
 
 import pymupdf as fitz

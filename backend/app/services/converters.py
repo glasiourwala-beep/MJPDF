@@ -357,21 +357,103 @@ async def pdf_to_docx(pdf_path: Path) -> Path:
 
 
 
+
 def _normalize_docx_lists(docx_path: Path) -> Path:
-    """Pass-through: avoid mutating DOCX (aggressive fixes hurt real layouts)."""
-    return docx_path
+    """
+    Light, safe pre-pass ONLY to protect page breaks before LibreOffice PDF export.
+    Does not change fonts, colors, or shading (those made layouts worse).
+    """
+    try:
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+
+        doc = Document(str(docx_path))
+        changed = False
+
+        def ensure_page_break_before(paragraph) -> None:
+            nonlocal changed
+            pPr = paragraph._p.get_or_add_pPr()
+            # already has pageBreakBefore?
+            pbb = pPr.find(qn("w:pageBreakBefore"))
+            if pbb is None:
+                el = OxmlElement("w:pageBreakBefore")
+                # insert near top of pPr
+                pPr.insert(0, el)
+                changed = True
+            else:
+                # force on
+                if pbb.get(qn("w:val")) in ("0", "false"):
+                    pbb.set(qn("w:val"), "1")
+                    changed = True
+
+        def paragraph_has_page_break(paragraph) -> bool:
+            # explicit break elements in runs
+            for child in paragraph._p.iter():
+                if child.tag == qn("w:br"):
+                    if child.get(qn("w:type")) == "page":
+                        return True
+                if child.tag == qn("w:pageBreakBefore"):
+                    return True
+            pPr = paragraph._p.pPr
+            if pPr is not None and pPr.find(qn("w:pageBreakBefore")) is not None:
+                return True
+            return False
+
+        INDEX_HINTS = (
+            "index",
+            "table of contents",
+            "contents",
+            "table of content",
+            "tableofcontents",
+        )
+
+        paras = list(doc.paragraphs)
+        for i, p in enumerate(paras):
+            text = (p.text or "").strip().lower()
+            style = ((p.style.name or "") if p.style else "").lower()
+
+            # Keep real page breaks already in the doc
+            if paragraph_has_page_break(p):
+                ensure_page_break_before(p)
+                continue
+
+            # Common cover / section starts that should not stick to previous page
+            if any(h in text for h in INDEX_HINTS) and len(text) < 80:
+                ensure_page_break_before(p)
+                continue
+
+            # Heading 1 often starts a new major section
+            if style in ("heading 1", "title") and i > 0:
+                prev = paras[i - 1].text.strip() if i > 0 else ""
+                # only if previous content exists (not first para)
+                if prev:
+                    ensure_page_break_before(p)
+
+        if not changed:
+            return docx_path
+
+        out = safe_output_path("word_breaks", "docx")
+        doc.save(str(out))
+        return out
+    except Exception:
+        return docx_path
 
 
 
 async def word_to_pdf(docx_path: Path) -> Path:
     """
-    Word DOC/DOCX → PDF via LibreOffice (simple, stable path).
-    No DOCX mutation — system Carlito/Liberation fonts handle Calibri metrics.
+    Word → PDF via LibreOffice.
+    Only light page-break protection (index/TOC/H1), no font/layout mutation.
     """
+    try:
+        src = await _run_sync(_normalize_docx_lists, docx_path)
+    except Exception:
+        src = docx_path
     work = TEMP_DIR / f"lo_word_{uuid.uuid4().hex}"
     work.mkdir(exist_ok=True)
     try:
-        converted = await _libreoffice_convert_async(docx_path, work, "pdf", timeout=180)
+        converted = await _libreoffice_convert_async(src, work, "pdf", timeout=180)
         if not converted.exists() or converted.stat().st_size < 50:
             raise RuntimeError("PDF output was empty")
         final = safe_output_path("word2pdf", "pdf")
@@ -384,7 +466,11 @@ async def word_to_pdf(docx_path: Path) -> Path:
         raise RuntimeError(f"Word to PDF failed: {msg}") from e
     finally:
         shutil.rmtree(work, ignore_errors=True)
-
+        if src != docx_path:
+            try:
+                src.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 

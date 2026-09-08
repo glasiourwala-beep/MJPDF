@@ -109,10 +109,11 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
     profile_dir.mkdir(parents=True, exist_ok=True)
     profile_uri = profile_dir.resolve().as_uri()
 
-    # Normalize filter (writer_pdf_Export can fail on some LO builds)
+    # Prefer Writer PDF export with font embedding (better alignment vs layout-only pdf)
     fmt = target_format
-    if fmt.startswith("pdf:"):
-        fmt = "pdf"
+    if fmt == "pdf" or fmt.startswith("pdf:"):
+        # Embed fonts so tab/column alignment stays closer to Word
+        fmt = 'pdf:writer_pdf_Export:EmbedStandardFonts=true'
 
     cmd = [
         lo,
@@ -356,18 +357,18 @@ async def pdf_to_docx(pdf_path: Path) -> Path:
 
 def _normalize_docx_lists(docx_path: Path) -> Path:
     """
-    Fix oversized list bullets/numbers before LibreOffice PDF export.
-    Caps single-character symbol runs and very large fonts on list paragraphs.
+    Pre-process DOCX before LO PDF export:
+    - Cap oversized bullet glyphs
+    - Expand tabs to spaces (tabs often destroy column alignment in LO)
     """
     try:
         from docx import Document
-        from docx.shared import Pt, Twips
+        from docx.shared import Pt
         doc = Document(str(docx_path))
         changed = False
         for p in doc.paragraphs:
             style_name = (p.style.name or "").lower() if p.style else ""
             is_list = "list" in style_name
-            # Also detect numbering via XML
             try:
                 pPr = p._p.pPr
                 if pPr is not None and pPr.numPr is not None:
@@ -376,9 +377,13 @@ def _normalize_docx_lists(docx_path: Path) -> Path:
                 pass
             for run in p.runs:
                 text = run.text or ""
-                # Single glyph bullets / weird symbols often blow up in LO
+                if "\t" in text or "	" in text:
+                    # Keep rough column gap without relying on LO tab stops
+                    run.text = text.replace("	", "    ")
+                    changed = True
+                    text = run.text
                 if len(text.strip()) <= 2 and text.strip() in {
-                    "•", "●", "○", "■", "□", "▪", "▫", "–", "-", "*", "·", "○", "◦",
+                    "•", "●", "○", "■", "□", "▪", "▫", "–", "-", "*", "·", "◦",
                     "►", "▸", "‣", "◆", "◇",
                 }:
                     try:
@@ -393,7 +398,6 @@ def _normalize_docx_lists(docx_path: Path) -> Path:
                 else:
                     try:
                         if run.font.size and run.font.size.pt > 28:
-                            # pathologically large body text – cap
                             run.font.size = Pt(12)
                             changed = True
                     except Exception:
@@ -406,8 +410,7 @@ def _normalize_docx_lists(docx_path: Path) -> Path:
                             changed = True
                     except Exception:
                         pass
-        if not changed:
-            return docx_path
+        # Prefer explicit left alignment on body when alignment missing can randomize
         out = safe_output_path("word_norm", "docx")
         doc.save(str(out))
         return out

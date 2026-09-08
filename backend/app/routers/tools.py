@@ -33,6 +33,23 @@ from ..config import TEMP_DIR
 
 router = APIRouter(prefix="/api", tags=["tools"])
 
+def _err(e: Exception, prefix: str = "") -> HTTPException:
+    """Map exceptions to clear HTTP errors (Render OOM / timeout friendly)."""
+    msg = str(e) or e.__class__.__name__
+    low = msg.lower()
+    if isinstance(e, MemoryError) or "memory" in low or "killed" in low:
+        msg = "Server ran out of memory. Try a smaller file (free plan is limited)."
+    elif "timed out" in low or "timeout" in low:
+        msg = "Processing timed out. Try a smaller file or retry."
+    elif "libreoffice" in low and "not found" in low:
+        msg = "Document conversion engine is unavailable on the server."
+    if prefix and not msg.startswith(prefix):
+        msg = f"{prefix}{msg}"
+    return HTTPException(status_code=500, detail=msg[:400])
+
+
+
+
 
 def _schedule_cleanup(background_tasks: BackgroundTasks, *paths):
     for p in paths:
@@ -60,7 +77,7 @@ async def word_to_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e)[:400])
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +100,7 @@ async def pptx_to_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e)[:400])
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +133,7 @@ async def compress_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=f"Compression failed: {str(e)}")
+        raise _err(e, "Compression failed: ")
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +162,7 @@ async def merge_pdf(
     except Exception as e:
         for p in paths:
             cleanup_file(p)
-        raise HTTPException(status_code=500, detail=f"Merge failed: {str(e)}")
+        raise _err(e, "Merge failed: ")
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +234,7 @@ async def split_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +263,7 @@ async def images_to_pdf(
     except Exception as e:
         for p in paths:
             cleanup_file(p)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _err(e)
 
 
 @router.post("/pdf-to-images")
@@ -277,7 +294,7 @@ async def pdf_to_images(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +405,7 @@ async def watermark_pdf(
     except Exception as e:
         cleanup_file(path)
         cleanup_file(img_path)
-        raise HTTPException(status_code=500, detail=f"Watermark failed: {e}")
+        raise _err(e, "Watermark failed: ")
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +431,7 @@ async def protect_pdf(
         )
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------
@@ -441,7 +458,7 @@ async def unlock_pdf(
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         cleanup_file(path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _err(e)
 
 
 # ---------------------------------------------------------------------------

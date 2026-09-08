@@ -59,8 +59,14 @@ def validate_file_type(file: UploadFile, expected_category: str | list[str]) -> 
     return original
 
 
+def _ensure_dirs():
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
 async def save_upload(file: UploadFile, expected_category: str | list[str]) -> tuple[Path, str]:
     """Validate, size-check and save upload to a unique temp path. Returns (path, original_name)."""
+    _ensure_dirs()
     original_name = validate_file_type(file, expected_category)
 
     content = await file.read()

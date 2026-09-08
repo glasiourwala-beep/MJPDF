@@ -18,7 +18,7 @@ def apply_owner_page_watermark(pdf_path: Path, text: str = "") -> None:
 
 from typing import Optional
 
-import pymupdf as fitz
+import pymupdf
 from pdf2docx import Converter
 from pypdf import PdfReader, PdfWriter
 from docx import Document
@@ -80,6 +80,8 @@ async def run_cmd(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
 
 
 def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, timeout: int = 180) -> Path:
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     """
     LibreOffice headless convert.
     Copies input to a simple ASCII filename (special chars break soffice),
@@ -473,10 +475,10 @@ async def pdf_to_pptx(pdf_path: Path) -> Path:
         except Exception:
             pass
         # Fallback: PyMuPDF (no poppler needed)
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         images = []
         for page in doc:
-            pix = page.get_pixmap(matrix=fitz.Matrix(120 / 72, 120 / 72), alpha=False)
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(120 / 72, 120 / 72), alpha=False)
             tmp = TEMP_DIR / f"pptx_page_{page.number}.png"
             pix.save(str(tmp))
             images.append(Image.open(tmp).copy())
@@ -615,14 +617,14 @@ async def compress_pdf(pdf_path: Path, level: str = "medium") -> tuple[Path, dic
     if not used_gs:
         # PyMuPDF fallback — no Ghostscript required
         def _fallback():
-            src = fitz.open(str(pdf_path))
+            src = pymupdf.open(str(pdf_path))
             try:
                 if level == "high":
                     # Stronger: rasterize pages at lower DPI + JPEG
-                    doc = fitz.open()
+                    doc = pymupdf.open()
                     try:
                         for page in src:
-                            mat = fitz.Matrix(100 / 72, 100 / 72)
+                            mat = pymupdf.Matrix(100 / 72, 100 / 72)
                             pix = page.get_pixmap(matrix=mat, alpha=False)
                             new_page = doc.new_page(width=page.rect.width, height=page.rect.height)
                             img_bytes = pix.tobytes("jpeg", jpg_quality=45)
@@ -824,7 +826,7 @@ async def pdf_to_images(pdf_path: Path, fmt: str = "jpg", dpi: int = 150, pages:
     loop = asyncio.get_running_loop()
 
     def _convert_pymupdf():
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         total = doc.page_count
         if pages:
             indices = _parse_page_ranges(pages, total)
@@ -835,7 +837,7 @@ async def pdf_to_images(pdf_path: Path, fmt: str = "jpg", dpi: int = 150, pages:
             raise ValueError("No valid pages selected")
 
         zoom = dpi / 72.0
-        mat = fitz.Matrix(zoom, zoom)
+        mat = pymupdf.Matrix(zoom, zoom)
         results = []
         for n, i in enumerate(indices):
             if i < 0 or i >= total:
@@ -1018,7 +1020,7 @@ async def watermark_pdf(
         return stamp
 
     def _watermark():
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         stamp_path = None
         try:
             for page in doc:
@@ -1041,7 +1043,7 @@ async def watermark_pdf(
                         wm.putalpha(a)
                         tmp_img = TEMP_DIR / f"wm_img_{uuid.uuid4().hex}.png"
                         wm.save(tmp_img, "PNG")
-                        img_rect = fitz.Rect(
+                        img_rect = pymupdf.Rect(
                             rect.width * 0.25,
                             rect.height * 0.25,
                             rect.width * 0.75,
@@ -1050,7 +1052,7 @@ async def watermark_pdf(
                         page.insert_image(img_rect, filename=str(tmp_img))
                         tmp_img.unlink(missing_ok=True)
                     except Exception:
-                        img_rect = fitz.Rect(
+                        img_rect = pymupdf.Rect(
                             rect.width * 0.25,
                             rect.height * 0.25,
                             rect.width * 0.75,
@@ -1124,11 +1126,11 @@ async def repair_pdf(pdf_path: Path) -> Path:
     def _repair():
         # First try PyMuPDF
         try:
-            doc = fitz.open(str(pdf_path))
+            doc = pymupdf.open(str(pdf_path))
             doc.save(str(out), garbage=4, deflate=True, clean=True)
             doc.close()
             # Validate
-            test = fitz.open(str(out))
+            test = pymupdf.open(str(out))
             if test.page_count == 0:
                 raise RuntimeError("Empty after repair")
             test.close()

@@ -483,6 +483,7 @@ function iconLabel(tool) {
           }, 200);
         };
 
+        xhr.timeout = 300000; // 5 minutes — large PDFs / cold start
         xhr.onload = () => {
           resolve({
             status: xhr.status,
@@ -494,19 +495,56 @@ function iconLabel(tool) {
             red: xhr.getResponseHeader("X-Reduction-Percent"),
           });
         };
-        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.onerror = () =>
+          reject(
+            new Error(
+              "Network error. The free server may be sleeping — wait 30s, refresh, and try again."
+            )
+          );
+        xhr.ontimeout = () =>
+          reject(
+            new Error(
+              "Request timed out. Try a smaller file, or retry once the server is warm."
+            )
+          );
         xhr.send(form);
       });
 
       if (result.status < 200 || result.status >= 300) {
         let msg = "Processing failed";
-        try {
-          const text = await result.blob.text();
-          const j = JSON.parse(text);
-          msg = j.detail || msg;
-          if (Array.isArray(msg)) msg = msg.map((x) => x.msg || x).join("; ");
-        } catch (_) {}
+        if (result.status === 502 || result.status === 503 || result.status === 504) {
+          msg =
+            "Server is waking up or temporarily busy. Wait 20–40 seconds and try again.";
+        } else if (result.status === 413) {
+          msg = "File is too large for the server.";
+        } else if (result.status === 0) {
+          msg =
+            "Connection lost. Refresh the page and try again (free servers sleep when idle).";
+        } else {
+          try {
+            const text = await result.blob.text();
+            try {
+              const j = JSON.parse(text);
+              let d = j.detail != null ? j.detail : j.message || j.error;
+              if (Array.isArray(d)) d = d.map((x) => x.msg || JSON.stringify(x)).join("; ");
+              if (d) msg = String(d);
+            } catch (_) {
+              // HTML / plain error body from proxy
+              const plain = (text || "").replace(/<[^>]+>/g, " ").trim();
+              if (plain && plain.length < 300) msg = plain;
+              else if (result.status >= 500)
+                msg =
+                  "Server error (" +
+                  result.status +
+                  "). Wait a moment and retry. Large files may fail on free hosting.";
+            }
+          } catch (_) {}
+        }
         throw new Error(msg);
+      }
+      // Empty success body is also a failure
+      if (!result.blob || result.blob.size === 0) {
+        throw new Error("Server returned an empty file. Please try again.");
       }
 
       if (objectUrl) URL.revokeObjectURL(objectUrl);

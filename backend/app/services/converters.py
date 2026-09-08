@@ -113,7 +113,7 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
     fmt = target_format
     if fmt == "pdf" or fmt.startswith("pdf:"):
         # Embed fonts so tab/column alignment stays closer to Word
-        fmt = 'pdf:writer_pdf_Export'
+        fmt = 'pdf'
 
     cmd = [
         lo,
@@ -356,184 +356,22 @@ async def pdf_to_docx(pdf_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
+
 def _normalize_docx_lists(docx_path: Path) -> Path:
-    """
-    Free-stack quality boost before LibreOffice PDF export:
-    - Map MS fonts to metric-compatible fonts (Calibri→Carlito, etc.)
-    - Expand tabs (tab stops break columns in LO)
-    - Cap oversized bullet/number glyphs
-    - Soften heavy paragraph shading that becomes ugly gray bars
-    - Normalize heading run sizes slightly for consistency
-    """
-    try:
-        from docx import Document
-        from docx.shared import Pt, Twips
-        from docx.oxml.ns import qn
-
-        FONT_MAP = {
-            "calibri": "Carlito",
-            "calibri light": "Carlito",
-            "cambria": "Caladea",
-            "arial": "Liberation Sans",
-            "times new roman": "Liberation Serif",
-            "courier new": "Liberation Mono",
-            "segoe ui": "Carlito",
-            "tahoma": "Liberation Sans",
-            "verdana": "Liberation Sans",
-            "georgia": "Liberation Serif",
-        }
-
-        doc = Document(str(docx_path))
-        changed = False
-
-        def map_font(run) -> None:
-            nonlocal changed
-            try:
-                name = (run.font.name or "").strip()
-                if not name and run._element.rPr is not None:
-                    rFonts = run._element.rPr.rFonts
-                    if rFonts is not None:
-                        name = (
-                            rFonts.get(qn("w:ascii"))
-                            or rFonts.get(qn("w:hAnsi"))
-                            or ""
-                        )
-                key = name.lower().strip()
-                if key in FONT_MAP:
-                    run.font.name = FONT_MAP[key]
-                    r = run._element
-                    rPr = r.get_or_add_rPr()
-                    rFonts = rPr.find(qn("w:rFonts"))
-                    if rFonts is None:
-                        from docx.oxml import OxmlElement
-                        rFonts = OxmlElement("w:rFonts")
-                        rPr.insert(0, rFonts)
-                    for attr in (
-                        qn("w:ascii"),
-                        qn("w:hAnsi"),
-                        qn("w:cs"),
-                        qn("w:eastAsia"),
-                    ):
-                        rFonts.set(attr, FONT_MAP[key])
-                    changed = True
-            except Exception:
-                pass
-
-        def strip_heavy_shading(paragraph) -> None:
-            nonlocal changed
-            try:
-                pPr = paragraph._p.pPr
-                if pPr is None:
-                    return
-                shd = pPr.find(qn("w:shd"))
-                if shd is not None:
-                    fill = (shd.get(qn("w:fill")) or "").upper()
-                    # Remove light gray fills that LO renders as ugly bars
-                    if fill in ("", "AUTO", "FFFFFF"):
-                        return
-                    # light grays common in student templates
-                    if fill in (
-                        "F2F2F2",
-                        "F5F5F5",
-                        "EEEEEE",
-                        "E7E6E6",
-                        "D9D9D9",
-                        "F0F0F0",
-                        "FAFAFA",
-                        "EDEDED",
-                    ):
-                        pPr.remove(shd)
-                        changed = True
-            except Exception:
-                pass
-
-        def fix_runs(paragraph, is_list: bool, is_heading: bool) -> None:
-            nonlocal changed
-            for run in paragraph.runs:
-                map_font(run)
-                text = run.text or ""
-                if "\t" in text:
-                    run.text = text.replace("\t", "    ")
-                    changed = True
-                    text = run.text
-                # Bullet / symbol glyphs
-                if len(text.strip()) <= 2 and text.strip() in {
-                    "•", "●", "○", "■", "□", "▪", "▫", "–", "-", "*", "·", "◦",
-                    "►", "▸", "‣", "◆", "◇", "➢", "➤",
-                }:
-                    try:
-                        run.font.size = Pt(11 if not is_heading else 12)
-                        changed = True
-                    except Exception:
-                        pass
-                try:
-                    if run.font.size and run.font.size.pt > 36:
-                        run.font.size = Pt(18 if is_heading else 12)
-                        changed = True
-                    elif is_list and run.font.size and run.font.size.pt > 14:
-                        run.font.size = Pt(11)
-                        changed = True
-                except Exception:
-                    pass
-
-        for p in doc.paragraphs:
-            style_name = (p.style.name or "") if p.style else ""
-            style_l = style_name.lower()
-            is_heading = style_l.startswith("heading") or style_l in {
-                "title",
-                "subtitle",
-            }
-            is_list = "list" in style_l
-            try:
-                pPr = p._p.pPr
-                if pPr is not None and pPr.numPr is not None:
-                    is_list = True
-            except Exception:
-                pass
-            strip_heavy_shading(p)
-            fix_runs(p, is_list, is_heading)
-
-        # Tables: same font/tab fixes
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        style_l = ((p.style.name or "") if p.style else "").lower()
-                        is_list = "list" in style_l
-                        try:
-                            if p._p.pPr is not None and p._p.pPr.numPr is not None:
-                                is_list = True
-                        except Exception:
-                            pass
-                        strip_heavy_shading(p)
-                        fix_runs(p, is_list, False)
-
-        out = safe_output_path("word_norm", "docx")
-        doc.save(str(out))
-        return out
-    except Exception:
-        return docx_path
+    """Pass-through: avoid mutating DOCX (aggressive fixes hurt real layouts)."""
+    return docx_path
 
 
 
 async def word_to_pdf(docx_path: Path) -> Path:
     """
-    Word DOC/DOCX → PDF via LibreOffice.
-    Pre-normalizes fonts/tabs/bullets/shading, then exports with Writer PDF filter.
+    Word DOC/DOCX → PDF via LibreOffice (simple, stable path).
+    No DOCX mutation — system Carlito/Liberation fonts handle Calibri metrics.
     """
-    try:
-        src = await _run_sync(_normalize_docx_lists, docx_path)
-    except Exception:
-        src = docx_path
     work = TEMP_DIR / f"lo_word_{uuid.uuid4().hex}"
     work.mkdir(exist_ok=True)
     try:
-        try:
-            converted = await _libreoffice_convert_async(
-                src, work, "pdf:writer_pdf_Export", timeout=180
-            )
-        except Exception:
-            converted = await _libreoffice_convert_async(src, work, "pdf", timeout=180)
+        converted = await _libreoffice_convert_async(docx_path, work, "pdf", timeout=180)
         if not converted.exists() or converted.stat().st_size < 50:
             raise RuntimeError("PDF output was empty")
         final = safe_output_path("word2pdf", "pdf")
@@ -546,11 +384,6 @@ async def word_to_pdf(docx_path: Path) -> Path:
         raise RuntimeError(f"Word to PDF failed: {msg}") from e
     finally:
         shutil.rmtree(work, ignore_errors=True)
-        if src != docx_path:
-            try:
-                src.unlink(missing_ok=True)
-            except Exception:
-                pass
 
 
 

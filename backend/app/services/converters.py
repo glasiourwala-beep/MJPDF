@@ -105,15 +105,20 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
     safe_in = out_dir / f"input_{uuid.uuid4().hex[:10]}{input_path.suffix.lower()}"
     shutil.copy2(str(input_path), str(safe_in))
 
-    profile_dir = TEMP_DIR / f"lo_prof_{uuid.uuid4().hex[:12]}"
-    profile_dir.mkdir(parents=True, exist_ok=True)
+    # Shared warm LO profile (fonts cached) — closer to local Windows quality
+    profile_dir = TEMP_DIR / "lo_profile_warm"
+    if not profile_dir.exists():
+        template = Path("/app/lo-profile-template")
+        if template.is_dir():
+            shutil.copytree(str(template), str(profile_dir))
+        else:
+            profile_dir.mkdir(parents=True, exist_ok=True)
     profile_uri = profile_dir.resolve().as_uri()
 
-    # Prefer Writer PDF export with font embedding (better alignment vs layout-only pdf)
     fmt = target_format
     if fmt == "pdf" or fmt.startswith("pdf:"):
-        # Embed fonts so tab/column alignment stays closer to Word
-        fmt = 'pdf'
+        # Writer PDF export preserves layout better than generic pdf on Linux
+        fmt = "pdf:writer_pdf_Export"
 
     cmd = [
         lo,
@@ -133,6 +138,8 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
         **os.environ,
         "HOME": str(profile_dir),
         "SAL_USE_VCLPLUGIN": "svp",
+        "FONTCONFIG_PATH": "/etc/fonts",
+        "SAL_FONTPATH": "/usr/lib/libreoffice/share/fonts/truetype/mjpdf",
     }
 
     try:
@@ -156,7 +163,7 @@ def _libreoffice_convert(input_path: Path, out_dir: Path, target_format: str, ti
             safe_in.unlink(missing_ok=True)
         except Exception:
             pass
-        shutil.rmtree(profile_dir, ignore_errors=True)
+        # keep warm profile for font cache (do not rmtree profile_dir)
 
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()

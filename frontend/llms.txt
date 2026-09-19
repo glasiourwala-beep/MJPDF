@@ -1,0 +1,26 @@
+# MJPDF
+> Free online PDF tools: convert Word/PowerPoint to PDF, compress, merge, split, protect, rotate, watermark, and more.
+
+MJPDF (https://mjpdf.onrender.com/) is a browser-based PDF toolkit. Users upload a file, the server processes it, and the result is available to download. Files are not stored permanently.
+
+## Main tools
+- Word to PDF: https://mjpdf.onrender.com/word-to-pdf
+- PowerPoint to PDF: https://mjpdf.onrender.com/pptx-to-pdf
+- Compress PDF: https://mjpdf.onrender.com/compress-pdf
+- Merge PDF: https://mjpdf.onrender.com/merge-pdf
+- Split PDF: https://mjpdf.onrender.com/split-pdf
+- Extract Pages: https://mjpdf.onrender.com/extract-pages
+- Delete Pages: https://mjpdf.onrender.com/delete-pages
+- Images to PDF: https://mjpdf.onrender.com/images-to-pdf
+- PDF to Images: https://mjpdf.onrender.com/pdf-to-images
+- Rotate PDF: https://mjpdf.onrender.com/rotate-pdf
+- Organize PDF: https://mjpdf.onrender.com/organize-pdf
+- Watermark PDF: https://mjpdf.onrender.com/watermark-pdf
+- Protect PDF: https://mjpdf.onrender.com/protect-pdf
+- Unlock PDF: https://mjpdf.onrender.com/unlock-pdf
+
+## Optional
+- About: https://mjpdf.onrender.com/about.html
+- Contact: https://mjpdf.onrender.com/contact.html
+- Privacy: https://mjpdf.onrender.com/privacy-policy
+- Self-hosted download: https://mjpdf.onrender.com/download.html

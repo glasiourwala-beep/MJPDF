@@ -424,6 +424,13 @@ if FRONTEND_DIR.exists():
             return FileResponse(path, media_type="text/plain")
         return _not_found_response()
 
+    @app.api_route("/llms.txt", methods=["GET", "HEAD"])
+    async def llms_txt():
+        path = _find_public_file("llms.txt")
+        if path:
+            return FileResponse(path, media_type="text/plain; charset=utf-8")
+        return _not_found_response()
+
     @app.api_route("/sitemap.xml", methods=["GET", "HEAD"])
     async def sitemap():
         path = _find_public_file("sitemap.xml")

@@ -286,7 +286,7 @@ main { flex: 1; }
 }
 .back-link:hover { color: var(--text); }
 .tool-hero { margin-bottom: 1.1rem; max-width: 40rem; }
-.tool-hero h1 {
+.tool-hero h2 {
   margin: 0 0 0.35rem;
   font-size: 1.55rem;
   letter-spacing: -0.02em;
@@ -533,7 +533,7 @@ main { flex: 1; }
   max-width: 14rem;
   line-height: 1.35;
 }
-.footer-col h4 {
+.footer-col h3 {
   margin: 0 0 0.4rem;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -788,7 +788,7 @@ main { flex: 1; }
   .tools-grid { grid-template-columns: 1fr; }
   .hero { padding: 1.75rem 0 1.15rem; }
   .workspace { padding-top: 1rem; min-height: 60vh; }
-  .tool-hero h1 { font-size: 1.35rem; }
+  .tool-hero h2 { font-size: 1.35rem; }
   .dropzone { padding: 1.5rem 1rem; }
   .footer-grid { grid-template-columns: 1fr; }
 }
@@ -976,3 +976,13 @@ html.cookie-lock, body.cookie-lock {
   }
   .footer-brand p { max-width: none; }
 }
+
+
+/* SEO content blocks */
+.seo-content { border-top: 1px solid var(--border); }
+.seo-content .narrow { max-width: 720px; }
+.seo-content h2 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; }
+.seo-content h3 { font-size: 1.02rem; margin: 1.1rem 0 0.35rem; color: var(--text); }
+.seo-content p { color: var(--muted); line-height: 1.65; margin: 0 0 0.75rem; }
+.seo-content a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+#tool-title { font-size: 1.6rem; margin: 0 0 0.35rem; }
